@@ -1,0 +1,247 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+// Basic tiled matmul + naive softmax
+#define TILE_WIDTH 8
+__global__ void matmul_transpose_kernel(float *A, float *B, float *C,int N, int d){
+
+  __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+  __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+
+  // each TILE process a block of threads
+  int bx = blockIdx.x;
+  int by = blockIdx.y;
+  int tx = threadIdx.x;
+  int ty = threadIdx.y;
+
+  // Row and Col for the P element
+  int outRow = by * TILE_WIDTH + ty;
+  int outCol = bx * TILE_WIDTH + tx;
+
+
+  if (outRow < N && outCol < N){
+  // Loop over M and N tiles to computer C
+    float sum = 0.0;
+    for (int ph=0; ph < d / TILE_WIDTH; ph++){
+      // Note we are doing A * B^T
+      // Collaborative loading of M and N tiles
+      Mds[ty][tx] = A[outRow*d + ph*TILE_WIDTH + tx];
+      Nds[ty][tx] = B[outCol*d + ph*TILE_WIDTH + ty];
+      __syncthreads();
+
+      for (int i=0; i<TILE_WIDTH; i++){
+        sum += Mds[ty][i] * Nds[tx][i];
+      }
+      __syncthreads();
+    }
+    C[outRow * N + outCol] = sum;
+  }
+}
+
+__global__ void matmul_kernel(float *A, float *B, float *C, int N, int d, int width){
+
+  __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+  __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+
+  int bx = blockIdx.x;
+  int by = blockIdx.y;
+  int tx = threadIdx.x;
+  int ty = threadIdx.y;
+
+  int outRow = by * TILE_WIDTH + ty;
+  int outCol = bx * TILE_WIDTH + tx;
+
+  if (outRow < N && outCol < d){
+  float sum = 0.0;
+  for (int ph = 0; ph < width / TILE_WIDTH; ph++) {
+    Mds[ty][tx] = A[outRow*N + ph*TILE_WIDTH + tx];
+    Nds[ty][tx] = B[(ph*TILE_WIDTH + ty) * d + outCol];
+    __syncthreads();
+
+    for (int i = 0; i < TILE_WIDTH; i++) {
+      sum += Mds[ty][i] * Nds[i][tx];
+    }
+    __syncthreads();
+  }
+  C[outRow * width + outCol] = sum;
+}
+}
+
+__global__ void max_rowwise(float *A, float *output, int row_size, int width) {
+
+  int row = blockIdx.x * blockDim.x + threadIdx.x;
+  // float max_value = 0.0f;
+  if (row < row_size) {
+    for (int i = 0; i < width; i++) {
+      if (A[row*width + i] > output[row]) { output[row] = A[row*width + i];}
+    }
+  }
+
+}
+__global__ void numerator_softmax(float *A, float *row_max, float *numerator, int N, int width){
+  int row = blockIdx.x * blockDim.x + threadIdx.x;
+  int col = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (row < N && col < N) {
+  numerator[row*width + col] = exp(A[row * width + col] - row_max[row]);
+  }
+}
+
+int main(){
+  float *Q_h;
+  float *K_h;
+  float *V_h;
+
+  int N = 32;// 1024; // No. of sequences
+  int d = 8;// 32; // Head dimensions
+
+  Q_h = (float *) malloc(N * d * sizeof(float));
+  K_h = (float *) malloc(N * d * sizeof(float));
+  V_h = (float *) malloc(N * d * sizeof(float));
+
+  int rand_max = 10;
+  srand(22);
+
+  // Generate random numbers
+  for(int i = 0; i < N * d; i++) {
+    Q_h[i] = rand() % rand_max + 1;
+    K_h[i] = rand() % rand_max + 1;
+    V_h[i] = rand() % rand_max + 1;
+  }
+
+  printf("\nFirst N values of Q: \n");
+  for(int i = 0; i < N; i++) {
+    printf("%f \t", Q_h[i]);
+    // printf("%f \t", K_h[i]);
+    // printf("%f \t", V_h[i]);
+  }
+  printf("\nFirst N values of K: \n");
+  for(int i = 0; i < N; i++) {
+    printf("%f \t", K_h[i]);
+    // printf("%f \t", K_h[i]);
+    // printf("%f \t", V_h[i]);
+  }
+  printf("\nFirst N values of V: \n");
+  for(int i = 0; i < N; i++) {
+    printf("%f \t", V_h[i]);
+    // printf("%f \t", K_h[i]);
+    // printf("%f \t", V_h[i]);
+  }
+
+  float *Q;
+  float *K;
+  float *V;
+
+  cudaMalloc(&Q, N * d * sizeof(float));
+  cudaMalloc(&K, N * d * sizeof(float));
+  cudaMalloc(&V, N * d * sizeof(float));
+
+  cudaMemcpy(Q, Q_h, N * d * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(K, K_h, N * d * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(V, V_h, N * d * sizeof(float), cudaMemcpyHostToDevice);
+
+  // matmul of Q and K^T i.e S = Q*K^T
+  float *S_h;
+  float *S;
+  S_h = (float *) malloc(N * N * sizeof(float));
+  cudaMalloc(&S, N * N * sizeof(float));
+
+  dim3 threadsPerBlock(TILE_WIDTH,TILE_WIDTH);
+  dim3 blocksPerGrid((N * threadsPerBlock.x - 1) / threadsPerBlock.x,
+                     (N * threadsPerBlock.y - 1) / threadsPerBlock.y);
+  matmul_transpose_kernel<<<blocksPerGrid, threadsPerBlock>>>(Q, K, S, N, d);
+
+  cudaMemcpy(S_h, S, N * N * sizeof(float), cudaMemcpyDeviceToHost);
+
+  printf("\nFirst N values of S: \n");
+  for(int i =0; i<2*N; i++){
+    printf("%f \t", S_h[i]);
+  }
+
+  // Max row
+  float *max_row_h;
+  float *max_row;
+  max_row_h = (float *) malloc(N * sizeof(float));
+  cudaMalloc(&max_row, N * sizeof(float));
+
+  max_rowwise<<<d, N>>>(S, max_row, N, N);
+  cudaMemcpy(max_row_h, max_row, N * sizeof(float), cudaMemcpyDeviceToHost);
+
+  printf("\nN values of max_row: \n");
+  for(int i =0; i<N; i++){
+    printf("%f \t", max_row_h[i]);
+  }
+
+  // Numerator: e^x - m(x)
+  float *numerator_h;
+  float *numerator;
+  numerator_h = (float *) malloc(N * N * sizeof(float));
+  cudaMalloc(&numerator, N * N * sizeof(float));
+
+  dim3 threadsNum(N, N);
+  dim3 blocksNum((N + threadsNum.x - 1) / threadsNum.x,
+                 (N + threadsNum.y -1) / threadsNum.y);
+  numerator_softmax<<<blocksNum,threadsNum>>>(S, max_row, numerator, N, N);
+  cudaMemcpy(numerator_h, numerator, N * N * sizeof(float), cudaMemcpyDeviceToHost);
+
+  printf("\nFirst N values of numerator: \n");
+  for(int i =0; i<N; i++){
+    printf("%f \t", numerator_h[i]);
+  }
+
+  // O = Softmax(numerator/denominator)
+  float *O_h;
+  float *O;
+  O_h = (float *) malloc(N*N*sizeof(float));
+  cudaMalloc(&O, N*N*sizeof(float));
+
+  float denominator = 0.0f;
+  for (int i = 0; i < N * N; i++) {
+    denominator += numerator_h[i];
+  }
+  printf("\ndenominator: %f\n",denominator);
+
+  for (int i = 0; i < N * N; i++) {
+    O_h[i] = numerator_h[i] / denominator;
+  }
+
+  printf("\nFirst N values of softmax: \n");
+  for(int i =0; i<N; i++){
+    printf("%f \t", O_h[i]);
+  }
+
+  // matmul of O and V i.e P = O*V
+  float *P_h;
+  float *P;
+  P_h = (float *) malloc(N * d * sizeof(float));
+  cudaMalloc(&P, N * d * sizeof(float));
+  dim3 threads(TILE_WIDTH,TILE_WIDTH);
+  dim3 blocks((d * threads.x - 1) / threads.x,
+              (N * threads.y - 1) / threads.y);
+
+  matmul_kernel<<<blocks, threads>>>(O, V, P, N, d, d);
+
+  cudaMemcpy(P_h, P, N * d * sizeof(float), cudaMemcpyDeviceToHost);
+
+  printf("\nFirst N values of P: \n");
+  for(int i =0; i<N; i++){
+    printf("%f \t", P_h[i]);
+  }
+
+
+  free(Q_h);
+  free(K_h);
+  free(V_h);
+  free(O_h);
+  free(max_row_h);
+  free(numerator_h);
+  free(S_h);
+  cudaFree(numerator);
+  cudaFree(S);
+  cudaFree(Q);
+  cudaFree(K);
+  cudaFree(V);
+  cudaFree(O);
+  return 0;
+}
