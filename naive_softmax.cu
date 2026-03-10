@@ -80,6 +80,7 @@ __global__ void max_rowwise(float *A, float *output, int row_size, int width) {
 
 }
 __global__ void numerator_softmax(float *A, float *row_max, float *numerator, int N, int width){
+  // Row wise calculation
   int row = blockIdx.x * blockDim.x + threadIdx.x;
   int col = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -87,6 +88,20 @@ __global__ void numerator_softmax(float *A, float *row_max, float *numerator, in
   numerator[row*width + col] = exp(A[row * width + col] - row_max[row]);
   }
 }
+
+__global__ void denominator_softmax(float *numa, float *den, int N, int width) {
+  // Row wise calculation
+  int row = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if (row < N) {
+    float sum = 0.0f;
+    for (int i = 0; i < width; i++) {
+      sum += numa[row * width + i];
+    }
+    den[row] = sum;
+    }
+}
+
 
 int main(){
   float *Q_h;
@@ -163,9 +178,13 @@ int main(){
   float *max_row_h;
   float *max_row;
   max_row_h = (float *) malloc(N * sizeof(float));
+  for (int i = 0; i < N; i++) {
+    max_row_h[i] = 0.0f;
+  }
   cudaMalloc(&max_row, N * sizeof(float));
+  cudaMemcpy(max_row, max_row_h, N * sizeof(float), cudaMemcpyHostToDevice);
 
-  max_rowwise<<<d, N>>>(S, max_row, N, N);
+  max_rowwise<<<(N + 32 -1)/32, 32>>>(S, max_row, N, N);
   cudaMemcpy(max_row_h, max_row, N * sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("\nN values of max_row: \n");
@@ -179,7 +198,7 @@ int main(){
   numerator_h = (float *) malloc(N * N * sizeof(float));
   cudaMalloc(&numerator, N * N * sizeof(float));
 
-  dim3 threadsNum(N, N);
+  dim3 threadsNum(16, 16);
   dim3 blocksNum((N + threadsNum.x - 1) / threadsNum.x,
                  (N + threadsNum.y -1) / threadsNum.y);
   numerator_softmax<<<blocksNum,threadsNum>>>(S, max_row, numerator, N, N);
@@ -196,14 +215,23 @@ int main(){
   O_h = (float *) malloc(N*N*sizeof(float));
   cudaMalloc(&O, N*N*sizeof(float));
 
-  float denominator = 0.0f;
-  for (int i = 0; i < N * N; i++) {
-    denominator += numerator_h[i];
-  }
-  printf("\ndenominator: %f\n",denominator);
+  float *den_h;
+  float *den;
+  den_h = (float *) malloc(N*sizeof(float));
+  cudaMalloc(&den, N*sizeof(float));
 
-  for (int i = 0; i < N * N; i++) {
-    O_h[i] = numerator_h[i] / denominator;
+  denominator_softmax<<<(d + 32 -1)/32, 32>>>(numerator, den, N, N);
+  cudaMemcpy(den_h, den, N * sizeof(float), cudaMemcpyDeviceToHost);
+
+  printf("\nN values of denominator: \n");
+  for(int i =0; i<N; i++){
+    printf("%f \t", den_h[i]);
+  }
+
+  for (int i = 0; i < N; i++) {
+    for (int j=0; j < N; j++){
+    O_h[i*N + j] = numerator_h[i*N + j] / den_h[i];
+    }
   }
 
   printf("\nFirst N values of softmax: \n");
@@ -211,14 +239,16 @@ int main(){
     printf("%f \t", O_h[i]);
   }
 
+  cudaMemcpy(O, O_h, N*N*sizeof(float), cudaMemcpyHostToDevice);
+
   // matmul of O and V i.e P = O*V
   float *P_h;
   float *P;
   P_h = (float *) malloc(N * d * sizeof(float));
   cudaMalloc(&P, N * d * sizeof(float));
   dim3 threads(TILE_WIDTH,TILE_WIDTH);
-  dim3 blocks((d * threads.x - 1) / threads.x,
-              (N * threads.y - 1) / threads.y);
+  dim3 blocks((d + threads.x - 1) / threads.x,
+              (N + threads.y - 1) / threads.y);
 
   matmul_kernel<<<blocks, threads>>>(O, V, P, N, d, d);
 
@@ -233,15 +263,17 @@ int main(){
   free(Q_h);
   free(K_h);
   free(V_h);
-  free(O_h);
   free(max_row_h);
   free(numerator_h);
   free(S_h);
+  // free(den_h);
+  // free(O_h);
+  // cudaFree(den);
+  // cudaFree(O);
   cudaFree(numerator);
   cudaFree(S);
   cudaFree(Q);
   cudaFree(K);
   cudaFree(V);
-  cudaFree(O);
   return 0;
 }
