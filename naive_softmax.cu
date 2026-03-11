@@ -210,11 +210,11 @@ int main(){
     printf("%f \t", numerator_h[i]);
   }
 
-  // O = Softmax(numerator/denominator)
-  float *O_h;
-  float *O;
-  O_h = (float *) malloc(N*N*sizeof(float));
-  cudaMalloc(&O, N*N*sizeof(float));
+  // P = Softmax(numerator/denominator)
+  float *P_h;
+  float *P;
+  P_h = (float *) malloc(N*N*sizeof(float));
+  cudaMalloc(&P, N*N*sizeof(float));
 
   float *den_h;
   float *den;
@@ -231,33 +231,33 @@ int main(){
 
   for (int i = 0; i < N; i++) {
     for (int j=0; j < N; j++){
-    O_h[i*N + j] = numerator_h[i*N + j] / den_h[i];
+    P_h[i*N + j] = numerator_h[i*N + j] / den_h[i];
     }
   }
 
   printf("\nFirst N values of softmax: \n");
   for(int i =0; i<100; i++){
-    printf("%f \t", O_h[i]);
+    printf("%f \t", P_h[i]);
   }
 
-  cudaMemcpy(O, O_h, N*N*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(P, P_h, N*N*sizeof(float), cudaMemcpyHostToDevice);
 
-  // matmul of O and V i.e P = O*V
-  float *P_h;
-  float *P;
-  P_h = (float *) malloc(N * d * sizeof(float));
-  cudaMalloc(&P, N * d * sizeof(float));
+  // matmul of P and V i.e O = P*V
+  float *O_h;
+  float *O;
+  O_h = (float *) malloc(N * d * sizeof(float));
+  cudaMalloc(&O, N * d * sizeof(float));
   dim3 threads(TILE_WIDTH,TILE_WIDTH);
   dim3 blocks((d + threads.x - 1) / threads.x,
               (N + threads.y - 1) / threads.y);
 
-  matmul_kernel<<<blocks, threads>>>(O, V, P, N, d, d);
+  matmul_kernel<<<blocks, threads>>>(O, V, O, N, d, d);
 
-  cudaMemcpy(P_h, P, N * d * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(O_h, O, N * d * sizeof(float), cudaMemcpyDeviceToHost);
 
-  printf("\nFirst N values of P: \n");
+  printf("\nFirst N values of O: \n");
   for(int i =0; i<100; i++){
-    printf("%f \t", P_h[i]);
+    printf("%f \t", O_h[i]);
   }
 
 
