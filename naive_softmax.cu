@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 
+// Standard Attention Implementaion
 // Basic tiled matmul + naive softmax
 #define TILE_WIDTH 8
 __global__ void matmul_transpose_kernel(float *A, float *B, float *C,int N, int d){
@@ -108,8 +109,8 @@ int main(){
   float *K_h;
   float *V_h;
 
-  int N = 32;// 1024; // No. of sequences
-  int d = 8;// 32; // Head dimensions
+  int N = 1024; // No. of sequences
+  int d = 32; // Head dimensions
 
   Q_h = (float *) malloc(N * d * sizeof(float));
   K_h = (float *) malloc(N * d * sizeof(float));
@@ -125,20 +126,20 @@ int main(){
     V_h[i] = rand() % rand_max + 1;
   }
 
-  printf("\nFirst N values of Q: \n");
-  for(int i = 0; i < N; i++) {
+  printf("\nFirst 100 values of Q: \n");
+  for(int i = 0; i < 100; i++) {
     printf("%f \t", Q_h[i]);
     // printf("%f \t", K_h[i]);
     // printf("%f \t", V_h[i]);
   }
   printf("\nFirst N values of K: \n");
-  for(int i = 0; i < N; i++) {
+  for(int i = 0; i < 100; i++) {
     printf("%f \t", K_h[i]);
     // printf("%f \t", K_h[i]);
     // printf("%f \t", V_h[i]);
   }
   printf("\nFirst N values of V: \n");
-  for(int i = 0; i < N; i++) {
+  for(int i = 0; i < 100; i++) {
     printf("%f \t", V_h[i]);
     // printf("%f \t", K_h[i]);
     // printf("%f \t", V_h[i]);
@@ -170,7 +171,7 @@ int main(){
   cudaMemcpy(S_h, S, N * N * sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("\nFirst N values of S: \n");
-  for(int i =0; i<2*N; i++){
+  for(int i =0; i<100; i++){
     printf("%f \t", S_h[i]);
   }
 
@@ -188,7 +189,7 @@ int main(){
   cudaMemcpy(max_row_h, max_row, N * sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("\nN values of max_row: \n");
-  for(int i =0; i<N; i++){
+  for(int i =0; i<100; i++){
     printf("%f \t", max_row_h[i]);
   }
 
@@ -205,7 +206,7 @@ int main(){
   cudaMemcpy(numerator_h, numerator, N * N * sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("\nFirst N values of numerator: \n");
-  for(int i =0; i<N; i++){
+  for(int i =0; i<100; i++){
     printf("%f \t", numerator_h[i]);
   }
 
@@ -224,7 +225,7 @@ int main(){
   cudaMemcpy(den_h, den, N * sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("\nN values of denominator: \n");
-  for(int i =0; i<N; i++){
+  for(int i =0; i<100; i++){
     printf("%f \t", den_h[i]);
   }
 
@@ -235,7 +236,7 @@ int main(){
   }
 
   printf("\nFirst N values of softmax: \n");
-  for(int i =0; i<N; i++){
+  for(int i =0; i<100; i++){
     printf("%f \t", O_h[i]);
   }
 
@@ -255,7 +256,7 @@ int main(){
   cudaMemcpy(P_h, P, N * d * sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("\nFirst N values of P: \n");
-  for(int i =0; i<N; i++){
+  for(int i =0; i<100; i++){
     printf("%f \t", P_h[i]);
   }
 
@@ -266,10 +267,10 @@ int main(){
   free(max_row_h);
   free(numerator_h);
   free(S_h);
-  // free(den_h);
-  // free(O_h);
-  // cudaFree(den);
-  // cudaFree(O);
+  free(den_h);
+  free(O_h);
+  cudaFree(den);
+  cudaFree(O);
   cudaFree(numerator);
   cudaFree(S);
   cudaFree(Q);
