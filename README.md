@@ -1,12 +1,73 @@
-Optimization of FlashAttention-4 on Blackwell GPUs for LLM inference
+* Project: FlashAttention for LLM Inference Optimization
 
-Implementaion details of FlashAttention-4 from scratch in raw CUDA (C++ kernels + PyTorch custom operator), moving beyond FlashAttention-v1 techniques to the latest Hopper/Blackwell-aware methods: warp-specialization + asynchronous TMA (Tensor Memory Accelerator) loads/stores, interleaved block-wise GEMM and softmax, incoherent processing + block quantization for FP8 (and early FP4 exploration), and CuTe-style tensor expressions ported to raw CUDA for maximum control.
+#+BEGIN_QUOTE
+This project implements and optimizes FlashAttention for large language model (LLM) inference, targeting both standard and Blackwell GPU architectures. The goal is to achieve significant speedups and memory savings over vanilla attention and previous FlashAttention versions, with benchmarking and integration into PyTorch workflows.
+#+END_QUOTE
 
+*** Goals
 
-Leveraged Blackwell-specific hardware: native 5th-gen Tensor Cores with massive FP8/FP6/FP4 throughput, increased register/shared memory bandwidth, and the latest async copy primitives (CUDA 12.8+ with sm_100/sm_12x compute capability).
++ Reimplement FlashAttention-2 from scratch, starting with tiled matmul and naive softmax, then progressing to shared memory tiling and online softmax.
++ Integrate custom CUDA kernels as a drop-in replacement for ~torch.nn.functional.scaled_dot_product_attention~.
++ Benchmark performance and memory usage against PyTorch baseline and official FlashAttention implementations.
++ Explore Blackwell-specific optimizations (TMA loads, warp specialization, FP8 GEMM) for maximum throughput.
 
+*** Phases
 
-Integrated as a drop-in torch.nn.functional replacement via torch.utils.cpp_extension (or CUTLASS 3.x helpers if you want to hybridize later) so it works seamlessly with Llama-3.1, Mistral, or GPT-style models in both training and inference.
+1. /Phase 1/: Reimplementation of FlashAttention-2 on Ada (RTX 4080)
+   + Implement basic tiled matmul and naive softmax.
+   + Add shared memory tiling and online softmax.
+   + Integrate warp-level reductions, causal masking, and PyTorch custom operator.
+   + Benchmark on GPT-2 style models (sequence length 128–2048).
+2. /Phase 2/: Blackwell GPU Optimization
+   + Rent Blackwell B200 on cloud.
+   + Test Phase 1 kernel and add Blackwell-specific features: TMA loads, warp specialization, FP8 GEMM.
 
+*** Current Progress
 
-Benchmarked vanilla PyTorch scaled_dot_product_attention vs. optimized kernel vs. official flash-attn-4 on Blackwell B100 GPUs (use cloud like RunPod, Lambda, or CoreWeave if you don’t have on-prem access). Tested forward + backward passes on sequence lengths 512 → 8K+ tokens, batch sizes typical for inference (1-32), using Nsight Compute, Nsight Systems, and PyTorch Profiler. Target metrics: 1.8–2.4× speedup over FA-2, >70% of Blackwell theoretical peak TFLOPS (aim for 1.5k+ TFLOPS in FP8), and ~2× lower HBM traffic / VRAM usage compared to baseline.
++ *Phase 1* is underway:
+  + ~naive_softmax.cu~ implements basic tiled matmul and naive softmax.
+  + ~flash.cu~ implements FlashAttention-style online softmax with block-wise tiling and shared memory.
+  + ~main.cpp~ exposes the CUDA kernel as a PyTorch extension.
+  + ~bench.py~ benchmarks the custom kernel against PyTorch's ~scaled_dot_product_attention~ using ~torch.utils.cpp_extension~.
++ Initial benchmarks are being run on Ada (RTX 4080) GPUs.
++ Integration with PyTorch is functional; outputs are compared for correctness.
+
+*** Usage
+
+1. Compile and run the CUDA kernels via PyTorch extension:
+   #+BEGIN_SRC python
+   minimal_attn = load(
+       name='minimal_attn',
+       sources=['main.cpp', 'flash.cu'],
+       extra_cuda_cflags=['-O3', '-arch=sm_89']
+   )
+   #+END_SRC
+2. Benchmark against PyTorch baseline:
+   #+BEGIN_SRC python
+   out = minimal_attn.forward(q, k, v)
+   out_ref = F.scaled_dot_product_attention(q, k, v, dropout_p=0.0)
+   print(torch.allclose(out, out_ref, atol=1e-2))
+   #+END_SRC
+
+*** Benchmarking
+
++ Profiling is performed using ~torch.autograd.profiler~, Nsight Systems, and PyTorch Profiler.
++ Target metrics:
+  + 2–3× speedup over vanilla PyTorch attention.
+  + 20% less VRAM usage.
+  + For Blackwell: 1.8–2.4× speedup over FA-2, >70% of theoretical peak TFLOPS, ~2× lower HBM traffic.
+
+*** References
+
++ FlashAttention v1 paper: https://arxiv.org/pdf/2205.14135
++ Tri Dao’s FlashAttention-2 blog: https://tridao.me/blog/2023/flash2/
++ Starter repo: https://github.com/tspeterkim/flash-attention-minimal
+
+*** Next Steps
+
++ Complete Phase 1 milestones and benchmarking.
++ Begin Phase 2: port kernels to Blackwell, implement TMA loads and FP8 GEMM.
++ Further optimize and validate on Llama-3.1, Mistral, GPT-style models.
+
+*** Contact
+Open an issue, if there are any questions.
