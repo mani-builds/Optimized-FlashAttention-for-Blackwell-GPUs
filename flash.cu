@@ -105,7 +105,7 @@ int main() {
 
   int N = 32;
   int d = 8;
-  int rnd_max = 100;
+  int rnd_max = 5;
   srand(22);
 
 
