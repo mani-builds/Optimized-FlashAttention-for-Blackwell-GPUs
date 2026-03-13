@@ -116,7 +116,7 @@ int main(){
   K_h = (float *) malloc(N * d * sizeof(float));
   V_h = (float *) malloc(N * d * sizeof(float));
 
-  int rand_max = 10;
+  int rand_max = 100;
   srand(22);
 
   // Generate random numbers
