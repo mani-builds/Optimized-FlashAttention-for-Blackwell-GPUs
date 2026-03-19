@@ -9,8 +9,8 @@ This is where you learn everything. Follow the original FlashAttention-1 paper +
 
 Milestones:
 
-** TODO Day 1–3: Read + implement basic tiled matmul + naive softmax (just to feel the pain).
-** TODO Day 4–7: Add shared memory tiling + online softmax (the real FlashAttention trick).
+** DONE Day 1–3: Read + implement basic tiled matmul + naive softmax (just to feel the pain).
+** DONE Day 4–7: Add shared memory tiling + online softmax (the real FlashAttention trick).
 ** TODO Day 8–10: Warp-level reductions, causal masking, PyTorch custom op integration (torch.utils.cpp_extension).
 ** TODO Benchmark on GPT-2 style (seq len 128 → 2048) with Nsight Systems + PyTorch Profiler. Target: 2–3× faster + 20% less VRAM than vanilla.
 
