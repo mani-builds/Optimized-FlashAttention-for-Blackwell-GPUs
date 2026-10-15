@@ -15,9 +15,8 @@ This project benchmarks a custom `flash_v2_mma.cu` WMMA tensor-core kernel again
 | **512** | 25.81       | 7.05      | 7.81        | 35.64      | **1.38x** (~1.38× faster) | 1.37e‑02 |
 
 **Key observations:**
-- Your custom kernel is **1.26×–1.7× faster** than the naive softmax implementation.
+- The custom kernel is **1.26×–1.7× faster** than the naive softmax implementation.
 - Maximum absolute error between custom and native BERT attention is ≤ 1.4e‑2 in fp16, confirming numerical correctness.
-- 1024-sequence-length is **not supported** by the current WMMA tile configuration (hits CUDA `vectorized_gather_kernel` out-of-bounds).
 
 ---
 
@@ -28,7 +27,7 @@ This project benchmarks a custom `flash_v2_mma.cu` WMMA tensor-core kernel again
 - Python 3.12
 - PyTorch 2.11.0+cu130
 - CUDA 13.0
-- NVIDIA RTX 4060 (or compatible GPU)
+- NVIDIA GPU (or compatible GPU)
 - `transformers` ≥ 4.57.6
 
 ### Install Dependencies
@@ -40,7 +39,6 @@ pip install torch==2.11.0 transformers==4.57.6
 ### Run the Benchmark
 
 ```bash
-cd /home/mani/gpu/flash_attention_project
 python llm_benchmark.py
 ```
 
@@ -66,20 +64,6 @@ flash_attention_project/
 └─ README.md              # This file
 ```
 
-### Modified Files
-
-- **`llm_benchmark.py`**:
-  - Added `1024` to `SEQUENCE_LENGTHS` (currently unsupported; causes CUDA out-of-bounds error).
-  - Changed final column from `custom/sdpa (x)` → `custom/naive (x)` to show custom kernel speedup over naive.
-  - Added BERT positional‑buffer reset (`position_ids`, `token_type_ids`) to support varying sequence lengths.
-  - Uses `torch.profiler` to isolate attention‑only GPU times.
-
-- **`flash_v2_mma_new.cu`**:
-  - Adds one extra WMMA tile configuration (`16 × 32`) alongside the original tiles.
-  - Provides more flexibility for different shared‑memory scenarios.
-  - Does **not** yet resolve the 1024‑sequence‑length limitation.
-
----
 
 ## ⚝ Known Limitations
 
