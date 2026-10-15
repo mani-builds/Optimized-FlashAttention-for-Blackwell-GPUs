@@ -164,6 +164,7 @@ fwd_kernel_wmma(const __half *Q, const __half *K, const __half *V,
           wmma::mma_sync(o_frag[nd], pa_frag[kb], v_frag, o_frag[nd]);
         }
       }
+      __syncthreads();
     }
 
     float inv_lA = 1.0f / lrowA;

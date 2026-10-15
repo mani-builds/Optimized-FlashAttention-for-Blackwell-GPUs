@@ -86,17 +86,17 @@ k = torch.rand(batch_size, num_heads, seq_len, head_dim, dtype=torch.float16)
 v = torch.rand(batch_size, num_heads, seq_len, head_dim, dtype=torch.float16)
 
 o = naive_attention(q,k,v)
-# print(o[:1,:1,:10, :10])
+print(o[:1,:1,:10, :10])
 # torch.cuda.synchronize()
 o1 = pytorch_flash_attn2(q,k,v)
-# print(o1[:1,:1,:10, :10])
+print(o1[:1,:1,:10, :10])
 # torch.cuda.synchronize()
-assert torch.allclose(o, o1, atol=1e-2), "Naive and Pytorch Outputs do not match"
+assert torch.allclose(o, o1, atol=1e-3, rtol=1e-2), "Naive and Pytorch Outputs do not match"
 
 o2 = flash_v2_mma_kernel(q,k,v)
-# print(o2[:1,:1,:10, :10])
+print(o2[:1,:1,:10, :10])
 # print(type(o2))
-assert torch.allclose(o1, o2, atol=1e-2), "Pytorch and CUdA kernel outputs do not match"
+assert torch.allclose(o1, o2, atol=1e-3, rtol=1e-2), "Pytorch and CUdA kernel outputs do not match"
 
 # torch.cuda.synchronize() # Wait for check to finish completely
 
