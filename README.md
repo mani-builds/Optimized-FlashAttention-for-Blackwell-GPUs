@@ -10,12 +10,12 @@ This project benchmarks a custom `flash_v2_mma.cu` WMMA tensor-core kernel again
 
 | seq_len | custom (ms) | sdpa (ms) | native (ms) | naive (ms) | **custom/naive (x)** | custom vs native error |
 |---------|-------------|-----------|-------------|------------|----------------------|------------------------|
-| **128** | 2.31        | 0.78      | 0.59        | 1.36       | **0.59x** (~1.7× faster) | 6.8e‑03 |
-| **256** | 7.11        | 2.00      | 1.99        | 8.96       | **1.26x** (~1.26× faster) | 6.8e‑03 |
-| **512** | 25.81       | 7.05      | 7.81        | 35.64      | **1.38x** (~1.38× faster) | 1.37e‑02 |
+| **128** | 2.31        | 0.78      | 0.59        | 1.36       | **0.59x**  | 6.8e‑03 |
+| **256** | 7.11        | 2.00      | 1.99        | 8.96       | **1.26x**  | 6.8e‑03 |
+| **512** | 25.81       | 7.05      | 7.81        | 35.64      | **1.38x**  | 1.37e‑02 |
 
 **Key observations:**
-- The custom kernel is **1.26×–1.7× faster** than the naive softmax implementation.
+- The custom kernel is **1.26×–1.38× faster** than the naive softmax implementation.
 - Maximum absolute error between custom and native BERT attention is ≤ 1.4e‑2 in fp16, confirming numerical correctness.
 
 ---
@@ -56,7 +56,6 @@ The script will:
 flash_attention_project/
 ├─ llm_benchmark.py       # Main benchmark script (modified)
 ├─ flash_v2_mma.cu        # Original CUDA kernel (WMMA tiles: 64×64, 32×64, 32×32, 16×16)
-├─ flash_v2_mma_new.cu    # Extended kernel (+16×32 tile config)
 ├─ standard_attention.py  # Reference attention implementation
 ├─ benchmark.py           # Original benchmark script
 ├─ build/                 # CUDA build artifacts (auto-generated)
@@ -77,7 +76,7 @@ flash_attention_project/
 
 ## 📦 How to Contribute / Extend
 
-1. **Add 1024 support** – Modify `flash_v2_mma_new.cu` to make the reduction loops dynamic in `seq_len`, add `min(seq_len, ...)` guards on memory reads, and potentially increase shared‑memory tile sizes.
+1. **Add 1024 support** – Modify `flash_v2_mma.cu` to make the reduction loops dynamic in `seq_len`, add `min(seq_len, ...)` guards on memory reads, and potentially increase shared‑memory tile sizes.
 2. **Add more tile configurations** – The `wmma_sram_size()` checks in `flash_attn_kernel()` can be extended with additional `(BR, BC, NWARPS)` combinations.
 3. **FP8 / BF16 support** – Adjust `TORCH_CHECK(head_dim % 16 == 0)` and `float16` typedefs if targeting mixed‑precision kernels.
 4. **Benchmark more models** – Modify `main()` to loop over different HuggingFace models or head dimensions.
@@ -87,8 +86,17 @@ flash_attention_project/
 ## 🙏 Acknowledgements
 
 - Based on [FlashAttention](https://github.com/HazyResearch/flash_attention) research.
-- Uses PyTorch `cpp_extension` for CUDA kernel loading.
-- BERT-base from HuggingFace `transformers` library.
+- Tri Dao’s FlashAttention-2 [blog](https://tridao.me/blog/2023/flash2/)
+- tspeterkim's [Starter repo](https://github.com/tspeterkim/flash-attention-minimal)
+
+---
+
+## 🚀 Future Scope
+
+- **Blackwell GPU support** – Planned integration for NVIDIA Blackwell architecture, leveraging enhanced WMMA tensor cores and increased shared-memory bandwidth.
+- **FP8 precision** – Future kernel revisions to support FP8 matmul for higher throughput and reduced memory bandwidth.
+- **Multi-head parallelism** – Extend the grid dimension beyond `(B, H)` to saturate larger GPU batches.
+- **Sequence-length tiling** – Chunked processing of `seq_len > 1024` without kernel rewrite, using a two-pass accumulation scheme.
 
 ---
 
