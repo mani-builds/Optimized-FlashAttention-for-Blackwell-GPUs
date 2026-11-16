@@ -15,7 +15,7 @@ This project benchmarks a custom `flash_v2_mma.cu` WMMA tensor-core kernel again
 | **512** | 25.81       | 7.05      | 7.81        | 35.64      | **1.38x**  | 1.37e‑02 |
 
 **Key observations:**
-- The custom kernel is **1.26×–1.38× faster** than the naive softmax implementation.
+- The custom kernel is **1.26x–1.38x faster** than the naive implementation for sequence lengths of 256 and 512.
 - Maximum absolute error between custom and native BERT attention is ≤ 1.4e‑2 in fp16, confirming numerical correctness.
 
 ---
@@ -44,7 +44,7 @@ python llm_benchmark.py
 
 The script will:
 1. Load BERT-base-uncased in fp16 on CUDA.
-2. Verify your custom kernel's output matches the native implementation (max absolute error printed per sequence length).
+2. Verify the custom kernel's output matches the native implementation (max absolute error printed per sequence length).
 3. Measure attention-only GPU time for: **custom**, **sdpa**, **native**, and **naive** implementations.
 4. Print a table with speedup ratios (`custom/naive`).
 
@@ -69,7 +69,7 @@ flash_attention_project/
 | Issue | Detail |
 |-------|--------|
 | **1024 sequence length** | The WMMA kernel hits `vectorized_gather_kernel` index-out-of-bounds. Requires significant kernel changes (dynamic loop bounds, increased shared memory, or chunked processing). |
-| **Deprecated API** | `torch.backends.cuda.sdp_kernel()` is deprecated in PyTorch 2.11; migration to `torch.nn.attention.sdpa_kernel()` is recommended. |
+| **Deprecated API** | `torch.backends.cuda.sdp_kernel()` is deprecated in PyTorch 2.11; use `torch.nn.attention.sdpa_kernel()` instead. |
 | **UNEXPECTED weight messages** | Benign when loading `bert-base-uncased`; not errors. |
 
 ---
