@@ -6,7 +6,7 @@ This project benchmarks a custom `flash_v2_mma.cu` WMMA tensor-core kernel again
 
 ---
 
-## 📊 Latest Benchmark Results (RTX 4060 Laptop, fp16)
+## Latest Benchmark Results (RTX 4060 Laptop, fp16)
 
 | seq_len | custom (ms) | sdpa (ms) | native (ms) | naive (ms) | **custom/naive (x)** | custom vs native error |
 |---------|-------------|-----------|-------------|------------|----------------------|------------------------|
@@ -20,7 +20,7 @@ This project benchmarks a custom `flash_v2_mma.cu` WMMA tensor-core kernel again
 
 ---
 
-## 🚀 How to Run the Benchmark
+## How to Run the Benchmark
 
 ### Prerequisites
 
@@ -50,7 +50,7 @@ The script will:
 
 ---
 
-## 🧠 Project Structure
+## Project Structure
 
 ```
 flash_attention_project/
@@ -64,7 +64,7 @@ flash_attention_project/
 ```
 
 
-## ⚝ Known Limitations
+## Known Limitations
 
 | Issue | Detail |
 |-------|--------|
@@ -74,7 +74,7 @@ flash_attention_project/
 
 ---
 
-## 📦 How to Contribute / Extend
+## How to Contribute / Extend
 
 1. **Add 1024 support** – Modify `flash_v2_mma.cu` to make the reduction loops dynamic in `seq_len`, add `min(seq_len, ...)` guards on memory reads, and potentially increase shared‑memory tile sizes.
 2. **Add more tile configurations** – The `wmma_sram_size()` checks in `flash_attn_kernel()` can be extended with additional `(BR, BC, NWARPS)` combinations.
@@ -83,7 +83,7 @@ flash_attention_project/
 
 ---
 
-## 🙏 Acknowledgements
+## Acknowledgements
 
 - Based on [FlashAttention](https://github.com/HazyResearch/flash_attention) research.
 - Tri Dao’s FlashAttention-2 [blog](https://tridao.me/blog/2023/flash2/)
@@ -91,7 +91,7 @@ flash_attention_project/
 
 ---
 
-## 🚀 Future Scope
+## Future Scope
 
 - **Blackwell GPU support** – Planned integration for NVIDIA Blackwell architecture, leveraging enhanced WMMA tensor cores and increased shared-memory bandwidth.
 - **FP8 precision** – Future kernel revisions to support FP8 matmul for higher throughput and reduced memory bandwidth.
@@ -100,6 +100,6 @@ flash_attention_project/
 
 ---
 
-### 📜 License
+### License
 
 MIT License – feel free to use, modify, and distribute.
